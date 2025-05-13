@@ -1,0 +1,34 @@
+function pl_resting_vol2mat(SubjDir, SPM, Condition, ROI)
+% Input order: SubjDir, SPM, Condition, Order, Run
+
+% Convert volumetric functional data (3D/4D) to SamSrf .mat file 
+
+% .........................................................................
+% Inputs
+% .........................................................................
+% SubjDir: Subject directory [cell]
+% SPMPath: Path to spm_ folder [cell]
+% Condition: The stimulation condition (D2 and/or D3 and/or D2+D3) [cell]
+% Order: The stimulation order (forward and backward) [cell]
+% Run: The stimulation run (01 and 02) [cell]
+% .........................................................................
+% Outputs
+% .........................................................................
+% Written by P.Liu
+% Optimized by P.Liu
+% Email: peng.liu@med.ovgu.de
+% Last updated 11 Oct 2022 by P.Liu
+%% ........................................................................Function
+
+DirSPM = fullfile(SubjDir,[SPM Condition]);
+cd(DirSPM)
+
+%FuncImg = 'resting_state.nii.gz';
+%gunzip(FuncImg);
+%delete(FuncImg);
+
+FunImg = 'resting_state';
+
+samsrf_vol2mat(FunImg, ROI, false);
+
+end
