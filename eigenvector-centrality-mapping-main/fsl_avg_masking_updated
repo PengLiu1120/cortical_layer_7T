@@ -1,0 +1,40 @@
+
+#!/bin/bash
+# fsl_avg_masking
+
+echo "starting fsl averaging and masking procedure"
+
+i=0
+
+dirs=(/home/doehlerj/Dokumente/PhD/sensemap/fMRI/data/*)
+#nii=normfadata_retroicor_0.0_ms.nii
+nii=data.nii
+
+echo $dirs
+
+for dir in ${dirs[@]}
+do
+    
+    subject_path=(${dir}/resting_state/)
+
+    echo "SUBJECT_$i: ${dir}"
+    echo "cd to: ${subject_path}"
+
+	cd $subject_path
+
+	if test -f "$nii"; then
+    	echo "$nii exists"
+		fsl5.0-fslmaths "$nii" -Tmean data_Tmean.nii
+		fsl5.0-bet2 data_Tmean.nii data_Tmean_brain -f 0.1 -g 0 -m
+		echo "Out: data_Tmean.nii"
+	else
+		echo "$nii does not exist"
+	fi
+		#copy ecmmap to folder young or old
+
+    i=$(($i + 1))
+
+done
+
+echo "DONE"
+ 

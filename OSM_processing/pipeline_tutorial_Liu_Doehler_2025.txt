@@ -1,0 +1,237 @@
+Pipeline tutorial to replicate results of Liu et al. 2023 (https://www.biorxiv.org/content/10.1101/2023.12.01.567841v3)
+-------------------------------------------------------------
+author: Juliane Döhler
+data: 27.04.2023 
+
+--------------
+# To Prepare #
+--------------
+0 Donwload and install dcm2niix converter
+1 Download and install MIPAV v7.3.0, JIST and cbstools (see gitlab wiki for installation tutorial: https://gitlab.com/estherkuehnneuroscience/mipav/-/wikis/MIPAV-Installation)
+2 Download and install ITK Snap v3.8.0
+3 Download and install Matlab (>= R2017b) + SPM12
+4 Download qsmbox v2.0 (https://gitlab.com/acostaj/QSMbox)
+5 Download and instal ANTs v2.1.0
+6 Download MIPAV pipelines from: https://gitlab.com/estherkuehnneuroscience/mipav/-/tree/master/pipelines/3D_Architecture_S1?ref_type=heads
+7 Download scripts from https://gitlab.com/estherkuehnneuroscience/layer-model-sensory-aging/
+
+--------------------------------------------
+# Preprocessing Steps of Structural 7T MRI #
+--------------------------------------------
+# all scripts needed for MIPAV-based preprocessing are share here: https://gitlab.com/estherkuehnneuroscience/mipav/-/tree/master/pipelines/3D_Architecture_S1?ref_type=heads
+
+0 Convert MP2RAGE DICOM to 3D Nifti files + quality check
+	0.1 open shell and run: dcm2niix path/to/your/raw/folder
+	0.2 inspect results visually to check for artifacts and data quality (2 independent raters evaluated all images before proceeding with the next steps)
+
+1 Registration of slab MP2RAGE data (0.5 mm isotropic) to upsampled (0.7 to 0.5 mm) whole brain MP2RAGE data (0.7 mm) 
+	1.1 go to MIPAV and load 0.7 mm MP2RAGE, go to Algorithms > Transformation Tools > Transform > Resample > User defined size > set to 0.5 (preserve dim-1*resolution)
+	1.2 go to MIPAV > JIST Layout Tool: open and run /Downloads/01_Registration.LayoutXML
+	1.3 check registration results carefully to ensure mismatch < 1 voxel (Registration quality between the QSM and MP2RAGE images was checked by two raters before proceeding.)
+
+2 Remove non-brain tissue and fuse slab and whole brain images together
+	1.1 go to MIPAV > JIST Layout Tool and run /Downloads/02_MergingSkullStripping.LayoutXML
+	1.2 check Skull Stripping results carefully to ensure that all of the cortex is preserved, make parameter adjustments for IHN3 Correction of INV2 image to improve skull stripping output if necessary (parameters of interest: kernel_fwhm, wiener_noise_filter)
+	1.3 check final results to ensure reasonable outcomes and whether all of non-brain tissue was removed successfully
+
+3 Adjust Dura mask manually if necessary
+	3.1 go to ITK Snap > load final (bounded) UNI image that comes out of step 2
+	3.2 mask all of remaining brain surrounding tissue that may cause misclassification of tissue segmentation in all slices using the pencil tool and save as new segmentation
+
+4 Tissue Segmentation and Use of Manual Dura mask
+	4.1  go to MIPAV > JIST Layout Tool and run /Downloads/03_Segmentation.LayoutXML
+	4.2 check final segmentation results
+	4.3 check final brain mask (combination of manual and automated masks)
+
+5 Prepare original high-res qT1 data for mapping
+	5.1  go to MIPAV > JIST Layout Tool and run /Downloads/04_PrepareMappingData.LayoutXML
+	5.2 check results to ensure reasonable outcomes
+
+6 Generate ROI mask of Area 3b
+	6.1 go to ITK Snap > load final (bounded) qT1 image that comes out of step 5
+	6.2 mask all slices that contain Area 3b using the pencil tool and save as new segmentation
+
+7 Layering and Mapping of qT1 data
+	7.1 go to MIPAV > JIST Layout Tool and run /Downloads/05_Mapping_WholeBrain.LayoutXML
+	7.2 check volumetric layering results carefully to ensure that the cortex is covered, but no white matter and CSF
+	7.3 improve volumteric layering results by adjusting inner and outer border thresholds of inner and outer levelset images in the corresponding Threshold to Binary Mask modules
+	7.4 check final results carefully to ensure reasonable outcomes (note that final outcome is in vtk format, i.e. surface space; vtk files can not be inspected in MIPAV; use paraview or any other viewer that can read vtk files)
+
+8 Mapping of ROI-specific (Area 3b) qT1 data
+	8.1 go to MIPAV > JIST Layout Tool and run /Downoads/06_Mapping_LeftS1.LayoutXML
+	8.2 check results carefully (vtk format; use paraview or any other vtk compatble viewer)
+
+9 Reconstruct QSM data from coil-uncombined 3D GRE data
+	9.0 read QSM tutorial: https://gitlab.com/estherkuehnneuroscience/qsm-reconstruction
+	9.1 Generate 4D images from coil-uncombined data. Therefore, use the dcm2niix command (dcm2niix -o target source) which generates 32 3D images (32 coil channels). Afterwards start dcm2nii GUI and select Nifti 3D to 4D conversion from the main menu under the file options. Read in all 32 3D files. As result you receive a 4D file with coil number as 4th dimension.
+	9.2 Download QSMbox v2 from gitlab (https://gitlab.com/acostaj/QSMbox) and follow the installation guide in the README file, i.e. set the SPM path in the config file (QSM-box/bashutils/QSMbox local settings.sh) as QSMbox v2 is SPM based.
+	9.3 prepare folder structure:
+		- subject/output
+		- subject/output/dicom/
+		- subject/output/dicom/first_dicom_image_of_your_sequence (needed to read in scan parameters)
+		- subject/output/magn_orig.nii (4D file)
+		- subject/output/phase_orig.nii (4D file)
+	9.4 Update settings file to: ptb.roi.spm.settings = ’7T_default’
+	9.5 The ptbs settings file for this data is: use_002_def_msdi2.m
+	9.6 In the ptbs file set "ptb.qsm.MSDI.tol_norm_ratio" to 0.1. This will make it 30-40% faster. For motor cortex measurements it is enough. Keep it as it is however if you are
+	planning to extract QSM from e.g. basal ganglia nuclei.
+	9.7 Before running matlab from a shell type in: SPM (to open SPM environment).
+	9.8 Run qsmbox and follow the instructions. 
+	9.9 The qsm_INTEGRAL_2 output take forward for analysis and mapping. 
+	9.10 If you are using MIPAV for further processing of reconstructed QSM data, it is recommended to multiply the data by factor 10000 using matlab. Run all MIPAV based calculations on the multiplied values. Finally, for better comparison, it is recommended to divide the resulting data by 10000 using matlab before running statistics and plotting layer-dependent profiles.
+
+10 Register the reconstructed QSM image to the qT1 image
+	10.1 go to ITK Snap (v3.8.0) > load merged qT1 image (result of step 2) as reference image
+	10.2 load QSM image as additional image
+	10.3 open Registration Tool
+	10.4 QSM images were registered to the merged qT1 images using the automated registration tool with manual refinement (prioritizing alignment in M1 and S1) where necessary. 
+	10.5 check registration results carefully to ensure mismatch < 1 voxel (Registration quality between the QSM and MP2RAGE images was checked by two raters before proceeding.)
+
+11 Mapping of QSM data
+	11.1 go to MIPAV > JIST Layout Tool and run /Downloads/07_Mapping_QSM_WholeBrain.LayoutXML
+	11.2 check results carefully (vtk format; use paraview or any other vtk compatble viewer)
+
+------------------------------------------------------------------------------------
+# Preprocessing of Functional Data #
+------------------------------------------------------------------------------------
+
+1 Bayesian pRF Modeling using Fourier Data
+	1.0 prepare functional Fourier data for modeling (generate 4D niftis, perform motion correction, perform slice time correction using SPM8, concatenate niftis of single phase-encoded runs after reversing 2nd run, prepare onset files) using scripts provided here: https://gitlab.com/estherkuehnneuroscience/fmri_preprocessing
+	1.1 Download pRF Modeling Pipeline: https://gitlab.com/pengliu1120/bayesian-prf-modelling
+	1.2 Run pipeline separately for each participant on concatenated phase-encoded data
+
+2 Extraction of t-maps from Blocked Design Data (tactile finger maps, motor body maps)
+	2.0 prepare functional blocked design data (generate 4D niftis, perform motion correction, perform slice time correction using SPM8, register 1st and 2nd run if necessary, prepare onset files) using scripts provided here: https://gitlab.com/estherkuehnneuroscience/fmri_preprocessing
+	2.1 GLM analysis using SPM8:
+		individually calculate fixed-effects models on the first level of the two blocked-design runs, treating each finger individually and independently, model each run with five regressors of interest (stimulation to D1, D2, D3, D4, D5) and computate five linear contrast estimates, for touch to D1, D2, D3, D4, and D5 [e.g., the contrast (−1 4 −1 −1 −1) for touch to D2].
+	2.3 set min. cluster size to 3 voxels, sign. level to 0.01
+	2.4 register resulting t-values maps to MP2RAGE data (see section # Registration and Mapping of functional statistical maps #)
+
+	# for further details and step-by-step guide see tutorial provided by A. Northall: https://gitlab.com/estherkuehnneuroscience/fmri_preprocessing/-/blob/master/localiser_scripts.zip
+
+3 Extraction of %-signal change
+
+	"Statistical analyses were conducted on the averaged individual time series of the averaged forward- and reversed-order runs from the phase-encoded paradigm (Kuehn et al., 2018; Liu et al., 2021) to calculate mean response amplitudes, using the program Fourier as implemented in csurf (http://www.cogsci.ucsd.edu/~sereno/.tmp/dist/csurf). Discrete Fourier transformations were performed on the time course of each 3D voxel, before calculating the phase and the significance of the periodic activation. Cycles of 20 stimulations were used as input frequencies. Frequencies below 0.005 Hz (known to be dominated by movement artifacts) were excluded, while higher frequencies up to the Nyquist limit (1/2 the sampling rate) were included. For display, a vector was generated whose amplitude was the square root of the F-ratio calculated by comparing the signal amplitude at the stimulus frequency to the signal amplitude at other noise frequencies, and whose angle was the stimulus phase. To estimate mean response amplitudes of the five finger ROIs (in %), we estimated the discrete Fourier transform response amplitude (hypotenuse given real and imaginary values) for each voxel, within each finger’s pRF center location area. This value was multiplied by two to account for positive and negative frequencies, again multiplied by two to estimate peak-to-peak values, divided by the number of time points over which averaging was performed to normalize the discrete Fourier transform amplitude, and divided by the average brightness of the functional data set (excluding air). Finally, the value was multiplied by 100 to estimate the percentage response amplitude(Kuehn et al., 2018; Liu et al., 2021). No spatial smoothing was applied to the data. The data was sampled onto the individual Freesurfer surface for each participant. To minimize the effect of superficial veins on BOLD signal change, superficial points along the surface normal to each vertex (upper 20% of the cortical thickness) were disregarded. The individual maps were calculated based on the mean value of the remaining depths (20-100% cortical depth). Clusters that survived a surface-based correction for multiple comparisons of p<.05 (correction was based on the cluster size exclusion method as implemented by surfclust and randsurfclust within the csurf FreeSurfer framework)(Hagler et al., 2006) and a cluster-level correction of p<.001 were defined as significant. For each participant and condition, the complex-valued phasing-mapping data (real and imaginary values) was sampled onto the individualized inflated 3D cortical surface, and the values within the ROI were extracted. Mean %signal change of the tactile maps of each condition were calculated."
+
+	to extract %signal change data use scripts provided here: https://gitlab.com/estherkuehnneuroscience/percent-signal-change
+
+4 Extraction of Eigenvector Centrality Maps (ECM)
+	# follow step-by-step guide provided here: https://gitlab.com/estherkuehnneuroscience/eigenvector-centrality-mapping > ECM_7T_instructions.pdf
+	4.0 download and install Lipsia software: https://github.com/lipsia-fmri/lipsia
+	4.1 prepare resting state data (generate 4D niftis, extract moco params, perform slice time correction on raw data, evaluate motion parameters) using scripts provided here:
+	https://gitlab.com/estherkuehnneuroscience/fmri_preprocessing
+	4.2 preprocess and filter physio data using scripts provided here: https://gitlab.com/estherkuehnneuroscience/physiodata_preprocessing
+	4.3 Eigenvector centrality mapping using scripts provided here: https://gitlab.com/estherkuehnneuroscience/eigenvector-centrality-mapping
+		4.3.1 run shell script fsl_avg_masking_updated
+		4.3.2 convert *MoCoParam*.mat to text
+		4.3.3 run shell script vnifti-vpreprocess-vecm-final
+
+-----------------------------------------------------------
+# Registration and Mapping of functional statistical maps #
+-----------------------------------------------------------
+1 Register functional statistical maps to the qT1 image
+	12.1 go to ITK Snap (v3.8.0) > load prepared high-res qT1 slab image (result of step 2) as reference image
+	12.2 load 3D EPI (i.e. 4D averaged across timepoints) as additional image
+	12.3 open Registration Tool
+	12.4 Functional images were registered to the qT1 slab images using the automated registration tool (non-rigid, 9 degrees of freedom) with manual refinement (prioritizing alignment in M1 and S1) where necessary (mismatch < 1voxel).
+	12.5 resulting ITK registration matrices (stored as txt) were applied to statistical maps (i.e. pRF maps, tmaps) using ANTs v2.1.0 by running the following shell script:
+		 https://gitlab.com/estherkuehnneuroscience/eigenvector-centrality-mapping > ecm_map_preprocess
+		 # do this also for pRF maps and tmaps
+
+2 Mapping of functional statistical maps
+	2.1 go to MIPAV > JIST Layout Tool and run following pipelines (available at https://gitlab.com/estherkuehnneuroscience/mipav/-/tree/master/pipelines/3D_Architecture_S1_Aging?ref_type=heads):
+		08_Mapping_function_without_layering.LayoutXML
+		Mapping_function_ecm
+		Mapping_function_hand_face_motor_maps
+		Mapping_function_prf_without_layering
+	2.2 check results carefully (vtk format; use paraview or any other vtk compatible viewer)
+
+--------------------------------------------
+# Extraction of mapped quantitative values #
+--------------------------------------------
+# download scripts from here: https://gitlab.com/estherkuehnneuroscience/3d-architecture-human-hand-area
+
+1 Read out vtk files and extract layer profiles of full and single finger maps
+	1.1 open Matlab and run scripts:
+		ReadOutLayerData_T1_21Layers.m
+		ReadOutLayerData_absQSM_21Layers.m
+		ReadOutLayerData_negQSM_21Layers.m
+		ReadOutLayerData_posQSM_21Layers.m
+		plot_T1_21Layers_rotated.m
+		plot_aQSM_21Layers_rotated.m
+		plot_nQSM_21Layers_rotated.m
+		plot_pQSM_21Layers_rotated.m
+
+	1.2 compare extracted layer profiles to Dinse et al. 2015 data
+		dinse_data.m
+
+	1.3 extract layer profile parameters and plot raw data together with linear trends
+		profile_nonlinearity.m
+
+2 Extract anatomically-relevant layer compartments from group average layer profiles
+	2.1 Open matlab and run follwoing script to extract layer definition
+		extract_AnatomicalLayers.m
+
+	2.2 Average into fewer compartments
+		ReadOutLayerData_T1_DDLayers.m
+		ReadOutLayerData_QSM_DDLayers.m
+		plot_T1_DDlayers.m
+		plot_QSM_DDlayers.m
+
+	2.3 Write resulting average surfaces back to vtk files
+		recreate_qT1_surfaces_DDlayers_WB.m
+		recreate_sigQSM_surfaces_DDlayers_WB.m
+
+3 Extract equally-spaced layer compartments
+	3.1 Open matlab and run follwoing script to average data into fewer compartments
+		ReadOutLayerData_T1_4Layers.m
+		ReadOutLayerData_QSM_4Layers.m
+		plot_T1_4Layers.m
+		plot_QSM_4Layers.m
+
+-----------------------------------------------------------------
+# Recreate finger maps after applying winner takes all approach #
+-----------------------------------------------------------------
+# download script from here https://gitlab.com/estherkuehnneuroscience/3d-architecture-human-hand-area
+
+1 Open matlab and run following script to write final finger maps back to vtk files
+	recreate_digit_maps_PRF_CL.m
+
+-------------------
+# 3D Septa Analysis
+-------------------
+# python-based pipeline to detect septa: https://gitlab.com/estherkuehnneuroscience/septa_detection
+
+To investigate low-myelin borders in human area 3b, a multimodal surface-based mapping approach was applied to each individual dataset. First, multidimensional sampling (inferior to superior, anterior to posterior) of layer-specific qT1 values was performed within area 3b (Pyvista implementation of the Dijkstra algorithm113). The peak activation of the thumb (as identified by blocked design data) served as seed region to sample geodesic paths in inferior-to-superior direction, connecting the upper face representation with the little finger representation. Start and end points were defined along the y-axis of D1 and D5 activation peaks and 10 mm (geodesic distance on shortest path) below the D1 activation peak (estimation based on the location of the forehead as described previously). Considered vertices were scattered within one vertex-to-vertex distance of appr. 0.28 mm around the y-axis. Only in cases where the underlying qT1 pattern did not match y-axis sampling, start and end points were defined along the x-axis. Five equally-distant geodesic paths were sampled for each participant to extract qT1 values from middle cortex depth (where the detection of low-myelin borders in area 3b is expected based on previous findings). Second, peak detection was performed on the five extracted qT1 signals. To control for a possible gradient in cortical myelin content along the inferior-to-superior axis, all qT1 signals were detrended before the find_peaks algorithm from the SciPy signal processing toolbox (version 1.10.1) was applied to find the most prominent peaks (local maxima with a prominence > 2 SD from the mean of absolute detrended qT1 values) in each detrended qT1 signal by comparing neighboring values. Resulting peaks were considered a low-myelin border (reflected by a row of high qT1 values) when they occurred in at least 3/5 detrended qT1 signals based on a nearest neighbor approach. The nearest peaks on first and second neighbor signals were grouped together based on geodesic distances. Peaks with a geodesic distance < 5 mm were considered near. Third, resulting low-myelin borders were back-projected to individual cortical surfaces and visualized in reference to individual pRF finger maps to categorize low-myelin borders in hand-face borders and within-hand borders (i.e., by visual inspection). Finally, a number of different features were extracted for each peak including prominence, full width at half maximum, qT1 intensity, Eigenvector centrality, signed QSM intensity, nQSM intensity, pQSM intensity and aQSM intensity. For each feature, all values belonging to a single border were averaged to obtain one feature vector for each border. Feature vectors of within-hand borders were further averaged across all within-hand borders. In this way, we extracted two feature vectors (one for within-hand borders and one for the hand-face border) in each individual which were used to calculate group statistics (between younger and older adults).
+
+To run septa detection algorithm:
+	- make sure hand and face action maps, recreated pRF finger maps and spmT finger maps (blocked design) are ready to use (registered and mapped to structural cortical surfaces in individual structural space)
+	- in a shell activate your python environment, navigate to your working directory and start jupyter notebooks, for example using conda:
+		conda activate shortest_path
+		cd /media/doehlerj/WIP-B1/Documents/FINAL/T1_profiles/S1_Aging_Paper/scripts/Python
+		jupyter-notebook
+- for younger and older adults: from a browser run pyvista_septa_v8_younger_older (individually for each participant)
+- for one-hander: from a browser run pyvista_septa_v8_onehander (individually for each participant)
+- dummy data available at: https://doi.org/10.7910/DVN/W5WHVK
+
+-----------------
+# One-hander Data
+-----------------
+Hand and face activation maps resulting from the motor paradigm were used to localize the hand-face area in younger and older adults and in the participant with congenital arm loss (layer-specific cortical thickness, low-myelin border and structural topography analyses). A “winner-takes-it-all” approach was applied to the extracted values to sample vertices only once. 
+
+Please note that for extraction of one-hander data the lowest 30% of t-values were removed to ensure comparable map sizes within and between participants. To exclude spatial outliers, vertices located more than two standard deviations away from the location of the main cluster (in z-direction and in y-direction) were removed from the final data.
+
+- use the following matlab scripts to extract qT1 and QSM data from the hand and face area:
+
+ReadOutLayerData_T1_HandFace.m
+plot_T1_21Layers_rotated_mHandFace.m
+
+ReadOutLayerData_QSM_HandFace.m
+plot_pQSM_21Layers_rotated_mHandFace.m
+plot_nQSM_21Layers_rotated_mHandFace.m
+plot_aQSM_21Layers_rotated_mHandFace.m
+
+- for registration of functional and QSM data to qT1 data follow steps described above
+- to apply initial registration matrices and to improve registration of functional data run the following scripts:
+	reg_f2s.py (function to qT1 registration)
+	reg_qsm2s.py (qsm to qT1 registration)

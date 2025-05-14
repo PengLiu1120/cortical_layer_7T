@@ -1,0 +1,99 @@
+
+#!/bin/bash
+# ecm with lipsia
+
+# written by Juliane Doehler
+# contact: juliane.doehler@med.ovgu.de
+# last updated: 26 Mar 2024
+
+# this script calls lipsia functions to perform calculations on resting state fMRI data:
+# 1 regressing out motion parameters
+# 2 calculating ecm with rlc metric developed by Gaby Lohmann
+# 3 calculating ecm with add metric
+# 4 showing results in vini viewer
+# 5 copying generated data to group folders (older adults / younger adults)
+
+# input data: fMRI time series nii (data.nii or adata.nii)
+# output data: covariates (motion), residuals, highpass filtered and smoothed data, ecm maps for two metrics (rlc, add)
+
+# please note: in case you want to iterate over all subjects in a specific folder do not list each subject ID instead:
+# uncomment subjects variable and use dirs array (from the comments below)
+# for the loop use variable dir (from comments below) instead of variable sub (uncomment all lines containing sub)
+
+echo "starting program"
+echo "moco regression + preprocessing (high pass filtering + smoothing) + ecm (lipsia)"
+
+##### set iteration counter to zero #####
+
+i=0
+
+##### define subjects to process #####
+
+subjects=(participant1 participant2 participan)
+
+##### specify data path and name to RETROICOR filtered time series (nifti) #####
+
+#dirs=(/home/doehlerj/Dokumente/PhD/sensemap/fMRI/data/*)
+path=(/home/doehlerj/Dokumente/PhD/sensemap/fMRI/data)
+nii=adata_retroicor_50.0_ms
+
+#echo $dirs 
+echo subjects
+
+##### loop to repeat calculations for each and every subject defined in variable subjects #####
+
+#for dir in ${dirs[@] }
+for sub in ${subjects[@]} # repeat loop for all elements in array subjects, start with first
+do
+    
+    #subject_path=(${dir}/resting_state/)
+    subject_path=(${path}/${sub}/resting_state/) #set data path for selected subject
+
+    #echo "SUBJECT_$i: ${dir}"
+    echo "SUBJECT_$i: ${sub}"
+    echo "cd to: ${subject_path}"
+
+	cd $subject_path
+
+	if test -f "${nii}.nii.gz"; then #check if nifti exists for selected subject
+    	echo "${nii}.nii.gz exists"
+
+    	##### call lipsia commands to perform preprocessing and ecm #####
+
+    	vcovariates -in moco.txt -normalize true -tr 2 -out motion.v -ignoreleft false
+    	vnifti -in ${nii}.nii.gz -tr 2 -out ${nii}.v
+    	echo "Out: ${nii}.v"
+
+    	vresiduals -in ${nii}.v -design motion.v -out ${nii}_mocores.v
+    	vnifti -in ${nii}_mocores.v -out ${nii}_mocores.nii
+
+		vpreprocess -in ${nii}_mocores.v -high 100 -fw 0 -out ${nii}_mocores_highpass.v 
+		vnifti -in ${nii}_mocores_highpass.v -out ${nii}_mocores_highpass.nii
+		#vpreprocess -in ${nii}_mocores.v -high 100 -fw 2 -out ${nii}_mocores_highpass_smooth.v #use this ine if you want to smooth the data
+		#vnifti -in ${nii}_mocores_highpass.v -out ${nii}_mocores_highpass.nii
+		#vnifti -in ${nii}_mocores_highpass_smooth.v -out ${nii}_highpass_smooth.nii
+		echo "Out: ${nii}_mocores_highpass.nii"
+
+		### metric rlc ###
+		vecm -in ${nii}_mocores_highpass.v -mask data_Tmean_brain_mask.nii.gz -metric rlc -out ${nii}_mocores_highpass_ecm.v #whole brain analysis
+		#vecm -in ${nii}_mocores_highpass_smooth.v -mask data_Tmean_brain_mask.nii.gz -metric rlc -out ${nii}_mocores_highpass_smooth_ecm.v #whole brain analysis for smoothed data
+		vnifti -in ${nii}_mocores_highpass_ecm.v -out ${nii}_mocores_highpass_ecm.nii
+		echo "Out: ${nii}_mocores_highpass_ecm.nii"
+
+		### open ecmaps in vini viewer ###
+		vtimestep -in adata.nii -out a.v
+		vini -in a.v -z ${nii}_mocores_highpass_ecm.v &
+
+	else
+		echo "${nii}.nii.gz does not exist"
+	fi
+
+    #echo "${dir##*/}"
+    echo "${sub}"
+
+	i=$(($i + 1))
+
+done
+
+echo "DONE"
+ 

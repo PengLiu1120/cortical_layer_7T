@@ -1,0 +1,19 @@
+# septa_detection
+
+Python-based pipeline to detect septa in area 3b as used in Liu et al. 2023 (https://www.biorxiv.org/content/10.1101/2023.12.01.567841v3).
+
+To investigate low-myelin borders in human area 3b, a multimodal surface-based mapping approach was applied to each individual dataset. First, multidimensional sampling (inferior to superior, anterior to posterior) of layer-specific qT1 values was performed within area 3b (Pyvista implementation of the Dijkstra algorithm113). The peak activation of the thumb (as identified by blocked design data) served as seed region to sample geodesic paths in inferior-to-superior direction, connecting the upper face representation with the little finger representation. Start and end points were defined along the y-axis of D1 and D5 activation peaks and 10 mm (geodesic distance on shortest path) below the D1 activation peak (estimation based on the location of the forehead as described previously). Considered vertices were scattered within one vertex-to-vertex distance of appr. 0.28 mm around the y-axis. Only in cases where the underlying qT1 pattern did not match y-axis sampling, start and end points were defined along the x-axis. Five equally-distant geodesic paths were sampled for each participant to extract qT1 values from middle cortex depth (where the detection of low-myelin borders in area 3b is expected based on previous findings). Second, peak detection was performed on the five extracted qT1 signals. To control for a possible gradient in cortical myelin content along the inferior-to-superior axis, all qT1 signals were detrended before the find_peaks algorithm from the SciPy signal processing toolbox (version 1.10.1) was applied to find the most prominent peaks (local maxima with a prominence > 2 SD from the mean of absolute detrended qT1 values) in each detrended qT1 signal by comparing neighboring values. Resulting peaks were considered a low-myelin border (reflected by a row of high qT1 values) when they occurred in at least 3/5 detrended qT1 signals based on a nearest neighbor approach. The nearest peaks on first and second neighbor signals were grouped together based on geodesic distances. Peaks with a geodesic distance < 5 mm were considered near. Third, resulting low-myelin borders were back-projected to individual cortical surfaces and visualized in reference to individual pRF finger maps to categorize low-myelin borders in hand-face borders and within-hand borders (i.e., by visual inspection). Finally, a number of different features were extracted for each peak including prominence, full width at half maximum, qT1 intensity, Eigenvector centrality, signed QSM intensity, nQSM intensity, pQSM intensity and aQSM intensity. For each feature, all values belonging to a single border were averaged to obtain one feature vector for each border. Feature vectors of within-hand borders were further averaged across all within-hand borders. In this way, we extracted two feature vectors (one for within-hand borders and one for the hand-face border) in each individual which were used to calculate group statistics (between younger and older adults).
+
+## Getting started
+
+First you need to create a Python 3 environment, for example using anaconda. Install all dependencies and packages as listed at the very top of the scripts. Start jupyter-notebook and run notebooks from your browser.
+
+## Requirements
+
+- Python 3 environment
+- Jupyter Notebooks
+
+## Dummy Data Availabe At:
+
+https://doi.org/10.7910/DVN/W5WHVK
+

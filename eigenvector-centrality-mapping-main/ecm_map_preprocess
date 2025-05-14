@@ -1,0 +1,49 @@
+
+#!/bin/bash 
+# registers ecm files using ITK reg matrix with ANTs
+
+# written by Juliane Doehler
+# contact: juliane.doehler@med.ovgu.de
+# last updated: 14 Jan 2021
+
+# this script registers ecm data created with LIPSIA to structural sensemap space:
+
+# input data: LIPSIA ECM files (as nii)
+# output data: registered ECM files (as nii)
+
+echo "starting program"
+echo "ecm registration"
+
+##### set iteration counter to zero #####
+
+i=0
+
+##### define subjects to process #####
+subjects=(participant1 participant2 participant3)
+##### specify data path and name to functional time series #####
+final_path=(/media/doehlerj/WIP-B1/Documents/FINAL/subjects)
+
+echo subjects
+
+##### loop to repeat calculations for each and every subject defined in variable subjects #####
+for sub in ${subjects[@]} # repeat loop for all elements in array subjects, start with first
+do
+    
+    t1_path=(${final_path}/${sub:0:3}/resting_state/)
+
+    echo "SUBJECT_$i: ${sub}"
+    echo "cd to: ${t1_path}"
+
+    cd $t1_path
+	
+	echo "applying registration matrix to ecm"
+	antsApplyTransforms --interpolation NearestNeighbor -d 3 -i data_retroicor_50.0_ms_mocores_highpass_smooth_ecm_add.nii -r anatomy.nii.gz -t reg_f2s.txt -o data_retroicor_50.0_ms_mocores_highpass_smooth_ecm_add_reg_NN.nii.gz
+	antsApplyTransforms --interpolation NearestNeighbor -d 3 -i data_retroicor_50.0_ms_mocores_highpass_smooth_ecm_rlc.nii -r anatomy.nii.gz -t reg_f2s.txt -o data_retroicor_50.0_ms_mocores_highpass_smooth_ecm_rlc_reg_NN.nii.gz
+	antsApplyTransforms --interpolation NearestNeighbor -d 3 -i data_Tmean.nii.gz -r anatomy.nii.gz -t reg_f2s.txt -o data_Tmean_reg_NN.nii.gz
+	echo "done registering!"
+
+	i=$(($i + 1))
+
+done
+
+echo "DONE"
