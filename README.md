@@ -12,3 +12,6 @@ The code includes:
 7. population receptive field mapping using SamSrf toolbox
 8. physiological data (pulse and respiratory) processing
 9. eigenvector centrality mapping using LIPSIA toolbox
+
+Dummy data are provided to run septa detection, which includes vtk, txt, csv and mat files for one younger adult and the onehander.
+https://doi.org/10.7910/DVN/W5WHVK
