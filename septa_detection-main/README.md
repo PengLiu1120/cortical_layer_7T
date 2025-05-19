@@ -14,8 +14,3 @@ First you need to create a Python 3 environment, for example using anaconda. Ins
 
 - Python 3 environment
 - Jupyter Notebooks
-
-## Dummy Data Availabe At:
-
-https://doi.org/10.7910/DVN/W5WHVK
-
